@@ -171,6 +171,19 @@
         }
     }
 
+    /** Clamp to [min,max], with sane fallback when max is invalid. */
+    function clampNumber(v, minV, maxV) {
+        var n = Number(v);
+        var mn = Number(minV);
+        var mx = Number(maxV);
+        if (!(n === n)) n = mn; // NaN
+        if (!(mn === mn)) mn = 0;
+        if (!(mx === mx) || mx < mn) mx = mn;
+        if (n < mn) return mn;
+        if (n > mx) return mx;
+        return n;
+    }
+
     function removeAudioLayerAndFootage(comp, layerName) {
         for (var i = 1; i <= comp.numLayers; i++) {
             var lyr = comp.layer(i);
@@ -469,10 +482,13 @@
                     logLine("Note: could not set comp.duration (" + eDur.toString() + "). Will clamp work area.");
                 }
 
-                var maxCompDur = activeComp.duration;
-                var renderDur = durSec;
-                if (renderDur > maxCompDur) {
-                    renderDur = maxCompDur;
+                var maxCompDur = Number(activeComp.duration);
+                if (!(maxCompDur > 0)) {
+                    maxCompDur = durSec;
+                }
+
+                var renderDur = clampNumber(durSec, 1 / activeComp.frameRate, maxCompDur);
+                if (renderDur < durSec) {
                     logLine(
                         "Note: audio longer than comp. Clamping render duration to " +
                             renderDur +
@@ -481,13 +497,27 @@
                             "s)."
                     );
                 }
-                if (renderDur <= 0) {
-                    renderDur = 1 / activeComp.frameRate;
-                }
-
                 audioLayer.outPoint = audioLayer.inPoint + renderDur;
                 activeComp.workAreaStart = 0;
-                activeComp.workAreaDuration = renderDur;
+                try {
+                    activeComp.workAreaDuration = renderDur;
+                } catch (eWA) {
+                    // AE can still reject edge cases; compute allowed range from current comp state.
+                    var requestedDur = renderDur;
+                    var minDur = 1 / activeComp.frameRate;
+                    var maxDurNow = Number(activeComp.duration) - Number(activeComp.workAreaStart);
+                    var safeDur = clampNumber(renderDur, minDur, maxDurNow);
+                    activeComp.workAreaDuration = safeDur;
+                    renderDur = safeDur;
+                    logLine(
+                        "Adjusted workAreaDuration after AE range error. Requested " +
+                            requestedDur +
+                            "s; using " +
+                            safeDur +
+                            "s. Details: " +
+                            eWA.toString()
+                    );
+                }
 
                 var asOk = configureAudioSpectrum(
                     asEffect,
