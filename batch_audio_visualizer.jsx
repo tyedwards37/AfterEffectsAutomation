@@ -441,7 +441,7 @@
 
         // Tuning: 1-based menu indices for Display / Side / Glow (English UI). If a menu
         // lands on the wrong option, count items top-to-bottom in Effect Controls and edit.
-        var SPECTRUM_DISPLAY_DIGITAL_INDEX = 3;
+        var SPECTRUM_DISPLAY_DIGITAL_INDEX = 1;
         var SPECTRUM_SIDE_A_AND_B_INDEX = 3;
         var GLOW_COMPOSITE_BEHIND_INDICES = [2, 3, 1];
         var GLOW_OPERATION_ADD_INDICES = [2, 1, 3, 4, 5];
