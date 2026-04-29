@@ -170,19 +170,38 @@
         }
     }
 
-    function getOrAddEffect(layer, matchName, displayNameForErrors) {
+    /**
+     * Finds an existing effect by matchName, or adds the first matchName that
+     * canAddProperty allows. Order matters: list current Adobe IDs first, then
+     * legacy fallbacks for older AE.
+     * Official list: https://ae-scripting.docsforadobe.dev/matchnames/effects/firstparty/
+     * (Audio Spectrum is ADBE AudSpect — not "ADBE Aud Spectrum". Glow is ADBE Glo2 in modern AE.)
+     */
+    function getOrAddEffectFromCandidates(layer, matchNames, displayNameForErrors) {
         var parade = layer.property("ADBE Effect Parade");
         if (!parade) {
             throw new Error("Could not access Effects on layer.");
         }
-        var existing = parade.property(matchName);
-        if (existing) {
-            return existing;
+        var m;
+        for (m = 0; m < matchNames.length; m++) {
+            var existing = parade.property(matchNames[m]);
+            if (existing) {
+                return existing;
+            }
         }
-        if (!parade.canAddProperty(matchName)) {
-            throw new Error("Cannot add effect " + matchName + " (" + displayNameForErrors + ").");
+        for (m = 0; m < matchNames.length; m++) {
+            var mn = matchNames[m];
+            if (parade.canAddProperty(mn)) {
+                return parade.addProperty(mn);
+            }
         }
-        return parade.addProperty(matchName);
+        throw new Error(
+            "Cannot add effect (" +
+                displayNameForErrors +
+                "). Tried matchNames: " +
+                matchNames.join(", ") +
+                ". Use a layer that accepts effects (e.g. Layer > New > Solid), not a guide-only or unsupported type."
+        );
     }
 
     /**
@@ -366,8 +385,8 @@
 
     var CURRENT_AUDIO_LAYER_NAME = "CURRENT_AUDIO_LAYER";
     var VISUALIZER_LAYER_NAME = "Black Solid 1";
-    var AUDIO_SPECTRUM_MATCH = "ADBE Aud Spectrum";
-    var GLOW_MATCH = "ADBE Glow";
+    var AUDIO_SPECTRUM_IDS = ["ADBE AudSpect"];
+    var GLOW_IDS = ["ADBE Glo2", "ADBE Glow"];
 
     try {
         if (!app.project) {
@@ -421,8 +440,8 @@
         var asEffect;
         var glowEffect;
         try {
-            asEffect = getOrAddEffect(vizLayer, AUDIO_SPECTRUM_MATCH, "Audio Spectrum");
-            glowEffect = getOrAddEffect(vizLayer, GLOW_MATCH, "Glow");
+            asEffect = getOrAddEffectFromCandidates(vizLayer, AUDIO_SPECTRUM_IDS, "Audio Spectrum");
+            glowEffect = getOrAddEffectFromCandidates(vizLayer, GLOW_IDS, "Glow");
         } catch (eEff) {
             alert("Error adding or locating effects:\n" + eEff.toString());
             return;

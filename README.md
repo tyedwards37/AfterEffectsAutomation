@@ -27,7 +27,7 @@ The script expects:
 
 That layer should carry your visualizer look. The script will:
 
-- Ensure the built-in effects **Audio Spectrum** and **Glow** exist on that layer (matchNames: `ADBE Aud Spectrum`, `ADBE Glow`). It adds them if they are missing.
+- Ensure the built-in effects **Audio Spectrum** and **Glow** exist on that layer (Adobe matchNames: `ADBE AudSpect`, `ADBE Glo2`; older AE may still use `ADBE Glow`). The script adds them if they are missing.
 - Apply settings that match the design brief in `prompt.txt` (with best-effort property matching across AE versions).
 
 If your layer has a different name, either rename the layer in the timeline to `Black Solid 1` or edit the variable `VISUALIZER_LAYER_NAME` inside `batch_audio_visualizer.jsx` to match your layer name.
@@ -97,7 +97,7 @@ For each `.wav`:
 | **No active composition** | Click the composition in the Project panel or open its tab so AE treats it as the active item, then run the script again. |
 | **No .wav files were found** | Put `.wav` files directly in the folder you selected (not only in subfolders). Check the extension spelling. |
 | **Could not find Black Solid 1** | Rename the visualizer layer to match, or edit `VISUALIZER_LAYER_NAME` in the `.jsx` file. |
-| **Cannot add effect ADBE Aud Spectrum** (or Glow) | You may be on a very old AE build, or the layer type cannot take that effect. Try a normal solid layer for the visualizer. |
+| **Cannot add effect (Audio Spectrum / Glow)** | Use a normal **Solid** (or other layer that accepts effects). If the error lists wrong matchNames, your script may be outdated — current IDs are `ADBE AudSpect` and `ADBE Glo2` per [Adobe’s effect matchName list](https://ae-scripting.docsforadobe.dev/matchnames/effects/firstparty/). |
 | **`canQueueInAME` is false** / queue errors | Pick a valid output module template in the Render Queue once manually, then rerun. Ensure the output path is writable. Install/update Media Encoder so its major version matches your AE generation. |
 | **Effect settings look wrong** | Property names and menu enums can differ between AE versions (and localized UIs). The script writes debug lines with every property `name` and `matchName` for Audio Spectrum and Glow when critical properties fail to set. Run from ExtendScript Toolkit (legacy) or another host with a JavaScript console, or a third-party AE console panel. |
 | **Only the first file looks correct** | Watch the AME queue: each job should reference a different output filename. If AME reuses a locked file, change the output folder or close prior exports. |
