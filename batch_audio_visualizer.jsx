@@ -459,17 +459,35 @@
                 if (durSec <= 0) {
                     durSec = 1;
                 }
-                audioLayer.outPoint = audioLayer.inPoint + durSec;
-
-                activeComp.workAreaStart = 0;
-                activeComp.workAreaDuration = durSec;
 
                 // Many exports key off comp duration; stretch comp to match audio when possible.
+                // This must happen BEFORE setting workAreaDuration, otherwise AE can throw
+                // "value out of range" when audio is longer than the current comp duration.
                 try {
                     activeComp.duration = durSec;
                 } catch (eDur) {
-                    logLine("Note: could not set comp.duration (" + eDur.toString() + "); work area still set.");
+                    logLine("Note: could not set comp.duration (" + eDur.toString() + "). Will clamp work area.");
                 }
+
+                var maxCompDur = activeComp.duration;
+                var renderDur = durSec;
+                if (renderDur > maxCompDur) {
+                    renderDur = maxCompDur;
+                    logLine(
+                        "Note: audio longer than comp. Clamping render duration to " +
+                            renderDur +
+                            "s (audio " +
+                            durSec +
+                            "s)."
+                    );
+                }
+                if (renderDur <= 0) {
+                    renderDur = 1 / activeComp.frameRate;
+                }
+
+                audioLayer.outPoint = audioLayer.inPoint + renderDur;
+                activeComp.workAreaStart = 0;
+                activeComp.workAreaDuration = renderDur;
 
                 var asOk = configureAudioSpectrum(
                     asEffect,
