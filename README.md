@@ -5,6 +5,7 @@ This folder contains a script that drives an existing After Effects template so 
 | File | Purpose |
 |------|---------|
 | `batch_audio_visualizer.jsx` | Main automation (ExtendScript / JSX) |
+| `debug_ae_version.jsx` | Optional: shows AE version, language, OS, and active comp size (run like any other script) |
 | `README.md` | This guide |
 | `PROGRESS.md` | Draft / version notes for the project |
 
@@ -99,9 +100,27 @@ For each `.wav`:
 | **Could not find Black Solid 1** | Rename the visualizer layer to match, or edit `VISUALIZER_LAYER_NAME` in the `.jsx` file. |
 | **Cannot add effect (Audio Spectrum / Glow)** | Use a normal **Solid** (or other layer that accepts effects). If the error lists wrong matchNames, your script may be outdated — current IDs are `ADBE AudSpect` and `ADBE Glo2` per [Adobe’s effect matchName list](https://ae-scripting.docsforadobe.dev/matchnames/effects/firstparty/). |
 | **`canQueueInAME` is false** / queue errors | Pick a valid output module template in the Render Queue once manually, then rerun. Ensure the output path is writable. Install/update Media Encoder so its major version matches your AE generation. |
-| **Effect settings look wrong** | Property names and menu enums can differ between AE versions (and localized UIs). The script writes debug lines with every property `name` and `matchName` for Audio Spectrum and Glow when critical properties fail to set. Run from ExtendScript Toolkit (legacy) or another host with a JavaScript console, or a third-party AE console panel. |
+| **Effect settings look wrong** | The script sets Audio Spectrum / Glow using **English** Effect Controls names (case-insensitive) so the right sliders move. **Display Options**, **Side Options**, **Composite Original**, and **Glow Operation** are menus stored as **1-based indices**; if your build orders items differently, edit `SPECTRUM_DISPLAY_DIGITAL_INDEX`, `SPECTRUM_SIDE_A_AND_B_INDEX`, `GLOW_COMPOSITE_BEHIND_INDICES`, and `GLOW_OPERATION_ADD_INDICES` in `batch_audio_visualizer.jsx` (search for “Tuning:”). For property names, run `debug_ae_version.jsx` and check the console, or log effect property names when the script warns. |
 | **Only the first file looks correct** | Watch the AME queue: each job should reference a different output filename. If AME reuses a locked file, change the output folder or close prior exports. |
 | **Undo** | Each file is wrapped in an undo group named `Batch audio: [filename]`. You can step backward in AE if something went wrong mid-batch. |
+| **Export is all black / no spectrum** | See [Black render / missing visualizer](#black-render--missing-visualizer) below. |
+
+### Find your After Effects version
+
+- **macOS:** menu **After Effects → About After Effects** (version and build are shown in the dialog).
+- **Windows:** menu **Help → About After Effects**.
+
+You can also run **`debug_ae_version.jsx`** (**File → Scripts → Run Script File…**). It alerts `app.version` (and build when available), UI language, OS, plus the **active comp** width × height and duration — useful because the batch script hard-codes Audio Spectrum **Start Point** / **End Point** for a 1280×720-style frame; a different comp size can push the spectrum off-screen or into a corner.
+
+### Black render / missing visualizer
+
+Work through these in order with the **same comp** the script uses (after a batch run, or by importing one WAV manually):
+
+1. **Audio Layer on Audio Spectrum** — Select **Black Solid 1**, open **Effect Controls**, and confirm **Audio Layer** is set to **`CURRENT_AUDIO_LAYER`** (not *None* or an old layer). If it is wrong, the spectrum often draws nothing useful.
+2. **Solo / mute / shy** — Make sure **Black Solid 1** is not muted, not hidden (eyeball), and that no **solo** state is hiding it. Check nothing **above** it is a full-frame opaque layer blocking the view.
+3. **Comp size vs Start / End Point** — The script sets Start **(640, 360)** and End **(1280, 360)** (horizontal line across the middle of a **1280×720** comp). If your comp is **1920×1080**, 4K, or **vertical**, that line may sit off-center or partly outside the frame; adjust those two properties to span your comp (e.g. left–right through the middle at half the comp height).
+4. **RAM preview** — Press **0** (numpad) or use the **Preview** panel with audio on. If preview is black too, the issue is in the comp/effects, not only AME.
+5. **AME / codec** — In Media Encoder, open the completed job’s **Export settings** and confirm you are not exporting only an alpha channel or an empty audio-only preset by mistake.
 
 ---
 

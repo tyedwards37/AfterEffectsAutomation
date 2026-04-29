@@ -98,15 +98,16 @@
     }
 
     /**
-     * Find first direct child property whose name contains any of the needles (case-insensitive).
+     * English Effect Controls names, case-insensitive. Prefer this over
+     * substring search so we do not bind the wrong control (e.g. "path" in "Polar Path").
      */
-    function findPropertyContains(effectGroup, needles) {
+    function findPropertyNameCI(effectGroup, names) {
         var n = effectGroup.numProperties;
         for (var i = 1; i <= n; i++) {
             var p = effectGroup.property(i);
-            var nm = p.name.toLowerCase();
-            for (var j = 0; j < needles.length; j++) {
-                if (nm.indexOf(needles[j].toLowerCase()) >= 0) {
+            var pn = p.name.toLowerCase();
+            for (var j = 0; j < names.length; j++) {
+                if (pn === names[j].toLowerCase()) {
                     return p;
                 }
             }
@@ -114,15 +115,26 @@
         return null;
     }
 
-    function findPropertyExact(effectGroup, names) {
+    /** First property whose name starts with prefix (case-insensitive), e.g. "Start Frequency" vs "Start Frequency (Hz)". */
+    function findPropertyNamePrefixCI(effectGroup, prefix) {
+        var pref = prefix.toLowerCase();
         var n = effectGroup.numProperties;
         for (var i = 1; i <= n; i++) {
             var p = effectGroup.property(i);
-            for (var j = 0; j < names.length; j++) {
-                if (p.name === names[j]) {
-                    return p;
-                }
+            if (p.name.toLowerCase().indexOf(pref) === 0) {
+                return p;
             }
+        }
+        return null;
+    }
+
+    function findParamFlexible(effectGroup, exactNames, prefixFallback) {
+        var r = findPropertyNameCI(effectGroup, exactNames);
+        if (r) {
+            return r;
+        }
+        if (prefixFallback) {
+            return findPropertyNamePrefixCI(effectGroup, prefixFallback);
         }
         return null;
     }
@@ -138,6 +150,19 @@
             logLine('Failed to set "' + label + '" (' + (prop ? prop.name : "?") + "): " + e.toString());
             return false;
         }
+    }
+
+    /** Try 1-based dropdown indices until setValue succeeds (does not verify label text). */
+    function setOneDEnumFirstWorking(prop, candidateIndices, label) {
+        if (!prop || prop.propertyValueType !== PropertyValueType.OneD) {
+            return false;
+        }
+        for (var i = 0; i < candidateIndices.length; i++) {
+            if (setValueSafe(prop, candidateIndices[i], label + " idx " + candidateIndices[i])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function clearRenderQueue(project) {
@@ -220,90 +245,67 @@
     }
 
     // -------------------------------------------------------------------------
-    // Configure Audio Spectrum (best-effort by property name)
+    // Configure Audio Spectrum — matches your spec (English Effect Controls names)
+    // Start/End 640,360 → 1280,360 | 200–1000 Hz | 40 bands | max height 1000 |
+    // Audio Duration 50 | Offset 0 | Thickness 10 | Softness 10% |
+    // Display: Digital | Side: Side A & B
+    // Dropdowns use 1-based menu indices; if your AE build orders menus differently,
+    // change SPECTRUM_DISPLAY_DIGITAL_INDEX / SPECTRUM_SIDE_A_AND_B_INDEX before the loop.
     // -------------------------------------------------------------------------
 
-    function configureAudioSpectrum(asEffect, audioLayer) {
+    function configureAudioSpectrum(asEffect, audioLayer, displayDigitalIndex, sideABIndex) {
         var ok = true;
+        function pf(exactNames, prefixFallback) {
+            return findParamFlexible(asEffect, exactNames, prefixFallback);
+        }
 
-        // Point spectrum at the new audio layer (layer index in the comp).
-        var audioLayerProp =
-            findPropertyExact(asEffect, ["Audio Layer"]) ||
-            findPropertyContains(asEffect, ["audio layer"]);
-        if (!setValueSafe(audioLayerProp, audioLayer.index, "Audio Layer")) {
+        var al = findPropertyNameCI(asEffect, ["Audio Layer"]);
+        if (!setValueSafe(al, audioLayer.index, "Audio Layer")) {
             ok = false;
         }
 
-        // Points
-        if (!setValueSafe(findPropertyExact(asEffect, ["Start Point"]), [640, 360], "Start Point")) {
-            if (!setValueSafe(findPropertyContains(asEffect, ["start point"]), [640, 360], "Start Point")) {
-                ok = false;
-            }
+        if (!setValueSafe(pf(["Start Point"], "Start Point"), [640, 360], "Start Point")) {
+            ok = false;
         }
-        if (!setValueSafe(findPropertyExact(asEffect, ["End Point"]), [1280, 360], "End Point")) {
-            if (!setValueSafe(findPropertyContains(asEffect, ["end point"]), [1280, 360], "End Point")) {
-                ok = false;
-            }
+        if (!setValueSafe(pf(["End Point"], "End Point"), [1280, 360], "End Point")) {
+            ok = false;
         }
 
-        // Path = None (first menu entry is usually None; if wrong, adjust after reading log)
-        var pathProp = findPropertyExact(asEffect, ["Path"]) || findPropertyContains(asEffect, ["path"]);
-        if (pathProp && pathProp.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(pathProp, 1, "Path");
-        }
+        setValueSafe(pf(["Start Frequency"], "Start Frequency"), 200, "Start Frequency");
+        setValueSafe(pf(["End Frequency"], "End Frequency"), 1000, "End Frequency");
+        setValueSafe(pf(["Frequency Bands"], "Frequency Bands"), 40, "Frequency Bands");
+        setValueSafe(pf(["Maximum Height"], "Maximum Height"), 1000, "Maximum Height");
 
-        setValueSafe(findPropertyContains(asEffect, ["polar"]), false, "Use Polar Path");
-
-        setValueSafe(findPropertyContains(asEffect, ["start frequency", "start freq"]), 200, "Start Frequency");
-        setValueSafe(findPropertyContains(asEffect, ["end frequency", "end freq"]), 1000, "End Frequency");
-        setValueSafe(findPropertyContains(asEffect, ["frequency bands", "bands"]), 40, "Frequency Bands");
-        setValueSafe(findPropertyContains(asEffect, ["maximum height", "max height"]), 1000, "Maximum Height");
-
-        // 50 ms — AE often stores time in seconds
-        var audioDur =
-            findPropertyExact(asEffect, ["Audio Duration"]) || findPropertyContains(asEffect, ["audio duration"]);
+        var audioDur = pf(["Audio Duration"], "Audio Duration");
         if (audioDur) {
-            if (!setValueSafe(audioDur, 0.05, "Audio Duration (as 0.05 sec)")) {
-                setValueSafe(audioDur, 50, "Audio Duration (as raw 50 — if wrong, see README.md)");
+            if (!setValueSafe(audioDur, 50, "Audio Duration (50)")) {
+                setValueSafe(audioDur, 0.05, "Audio Duration (fallback 0.05 s)");
             }
         }
 
-        setValueSafe(findPropertyContains(asEffect, ["audio offset"]), 0, "Audio Offset");
-        setValueSafe(findPropertyContains(asEffect, ["thickness"]), 10, "Thickness");
+        setValueSafe(pf(["Audio Offset"], "Audio Offset"), 0, "Audio Offset");
+        setValueSafe(pf(["Thickness"], "Thickness"), 10, "Thickness");
 
-        // Softness 10% — try normalized then whole percent
-        var soft = findPropertyContains(asEffect, ["softness"]);
+        var soft = pf(["Softness"], "Softness");
         if (soft) {
-            if (!setValueSafe(soft, 0.1, "Softness (0.1 = 10%)")) {
-                setValueSafe(soft, 10, "Softness (10)");
+            if (!setValueSafe(soft, 10, "Softness (10 percent)")) {
+                setValueSafe(soft, 0.1, "Softness (fallback 0.1)");
             }
         }
 
-        var white = [1, 1, 1];
-        setValueSafe(findPropertyContains(asEffect, ["inside color"]), white, "Inside Color");
-        setValueSafe(findPropertyContains(asEffect, ["outside color"]), white, "Outside Color");
-
-        setValueSafe(findPropertyContains(asEffect, ["blend overlapping"]), false, "Blend Overlapping Colors");
-        setValueSafe(findPropertyContains(asEffect, ["hue interpolation"]), 0, "Hue Interpolation");
-        setValueSafe(findPropertyContains(asEffect, ["dynamic hue"]), false, "Dynamic Hue Phase");
-        setValueSafe(findPropertyContains(asEffect, ["color symmetry"]), false, "Color Symmetry");
-
-        // Display: Digital — enum index varies by version; try common English indices
-        var disp = findPropertyContains(asEffect, ["display"]);
+        var disp = pf(["Display Options"], "Display Options");
         if (disp && disp.propertyValueType === PropertyValueType.OneD) {
-            if (!setValueSafe(disp, 2, "Display Options (Digital)")) {
-                setValueSafe(disp, 3, "Display Options (Digital alt)");
+            if (!setValueSafe(disp, displayDigitalIndex, "Display Options (Digital index)")) {
+                setOneDEnumFirstWorking(disp, [3, 1, 2, 4], "Display Options");
             }
         }
 
-        // Side A & B — common index 3 in English (depends on menu order)
-        var side = findPropertyContains(asEffect, ["side"]);
+        var side = pf(["Side Options"], "Side Options");
         if (side && side.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(side, 3, "Side Options");
+            if (!setValueSafe(side, sideABIndex, "Side Options (A & B index)")) {
+                setOneDEnumFirstWorking(side, [3, 2, 1], "Side Options");
+            }
         }
-
-        setValueSafe(findPropertyContains(asEffect, ["duration averaging"]), false, "Duration Averaging");
-        setValueSafe(findPropertyContains(asEffect, ["composite on original"]), false, "Composite On Original");
 
         if (!ok) {
             logEffectPropertyNames(asEffect, "Audio Spectrum");
@@ -312,65 +314,34 @@
     }
 
     // -------------------------------------------------------------------------
-    // Configure Glow
+    // Configure Glow — only the controls you listed (threshold, radius, intensity,
+    // composite behind, operation add). Enum indices: edit before the batch loop if needed.
     // -------------------------------------------------------------------------
 
-    function configureGlow(glowEffect) {
+    function configureGlow(glowEffect, compositeBehindIndices, addOpIndices) {
         var ok = true;
-
-        // "Glow Based On: Color Channels" — enum; 1 is often Color Channels vs Alpha
-        var based = findPropertyContains(glowEffect, ["based on", "glow based"]);
-        if (based && based.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(based, 1, "Glow Based On");
+        function pf(exactNames, prefixFallback) {
+            return findParamFlexible(glowEffect, exactNames, prefixFallback);
         }
 
-        if (!setValueSafe(findPropertyContains(glowEffect, ["threshold"]), 60, "Glow Threshold (%)")) {
+        if (!setValueSafe(pf(["Glow Threshold"], "Glow Threshold"), 60, "Glow Threshold")) {
             ok = false;
         }
-        if (!setValueSafe(findPropertyContains(glowEffect, ["radius"]), 30, "Glow Radius")) {
+        if (!setValueSafe(pf(["Glow Radius"], "Glow Radius"), 30, "Glow Radius")) {
             ok = false;
         }
-        if (!setValueSafe(findPropertyContains(glowEffect, ["intensity"]), 0.5, "Glow Intensity")) {
+        if (!setValueSafe(pf(["Glow Intensity"], "Glow Intensity"), 0.5, "Glow Intensity")) {
             ok = false;
         }
 
-        // Composite Original: Behind
-        var compOrig =
-            findPropertyContains(glowEffect, ["composite original"]) ||
-            findPropertyContains(glowEffect, ["composite"]);
+        var compOrig = pf(["Composite Original"], "Composite Original");
         if (compOrig && compOrig.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(compOrig, 2, "Composite Original");
+            setOneDEnumFirstWorking(compOrig, compositeBehindIndices, "Composite Original (Behind)");
         }
 
-        // Glow Operation: Add
-        var op = findPropertyContains(glowEffect, ["operation", "glow operation"]);
-        if (op && op.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(op, 1, "Glow Operation (Add)");
-        }
-
-        // Glow Colors: Original Colors
-        var gc = findPropertyContains(glowEffect, ["glow colors"]);
-        if (gc && gc.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(gc, 1, "Glow Colors");
-        }
-
-        // Color Looping: Triangle A>B>A
-        var loopType = findPropertyContains(glowEffect, ["color looping", "looping"]);
-        if (loopType && loopType.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(loopType, 3, "Color Looping");
-        }
-
-        setValueSafe(findPropertyContains(glowEffect, ["color loops"]), 1.0, "Color Loops");
-        setValueSafe(findPropertyContains(glowEffect, ["color phase"]), 0, "Color Phase");
-        setValueSafe(findPropertyContains(glowEffect, ["midpoint", "a & b"]), 50, "A & B Midpoint (%)");
-
-        setValueSafe(findPropertyContains(glowEffect, ["color a"]), [1, 1, 1], "Color A");
-        setValueSafe(findPropertyContains(glowEffect, ["color b"]), [0, 0, 0], "Color B");
-
-        // Glow Dimensions: Horizontal and Vertical
-        var dim = findPropertyContains(glowEffect, ["dimension"]);
-        if (dim && dim.propertyValueType === PropertyValueType.OneD) {
-            setValueSafe(dim, 1, "Glow Dimensions");
+        var gop = pf(["Glow Operation"], "Glow Operation");
+        if (gop && gop.propertyValueType === PropertyValueType.OneD) {
+            setOneDEnumFirstWorking(gop, addOpIndices, "Glow Operation (Add)");
         }
 
         if (!ok) {
@@ -455,6 +426,13 @@
             return;
         }
 
+        // Tuning: 1-based menu indices for Display / Side / Glow (English UI). If a menu
+        // lands on the wrong option, count items top-to-bottom in Effect Controls and edit.
+        var SPECTRUM_DISPLAY_DIGITAL_INDEX = 3;
+        var SPECTRUM_SIDE_A_AND_B_INDEX = 3;
+        var GLOW_COMPOSITE_BEHIND_INDICES = [2, 3, 1];
+        var GLOW_OPERATION_ADD_INDICES = [2, 1, 3, 4, 5];
+
         var processed = 0;
         var failed = 0;
 
@@ -493,8 +471,13 @@
                     logLine("Note: could not set comp.duration (" + eDur.toString() + "); work area still set.");
                 }
 
-                var asOk = configureAudioSpectrum(asEffect, audioLayer);
-                var gOk = configureGlow(glowEffect);
+                var asOk = configureAudioSpectrum(
+                    asEffect,
+                    audioLayer,
+                    SPECTRUM_DISPLAY_DIGITAL_INDEX,
+                    SPECTRUM_SIDE_A_AND_B_INDEX
+                );
+                var gOk = configureGlow(glowEffect, GLOW_COMPOSITE_BEHIND_INDICES, GLOW_OPERATION_ADD_INDICES);
                 if (!asOk) {
                     alert(
                         "Warning: Some Audio Spectrum properties may not have applied.\n" +

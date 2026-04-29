@@ -12,6 +12,7 @@ This file tracks **drafts** of the batch audio visualizer project: what changed,
 | **D2** | 2026-04-28 | Documentation: `README.txt` replaced by **`README.md`** (same content, Markdown structure). Added **`PROGRESS.md`** (this file) for draft tracking. Alert strings in `batch_audio_visualizer.jsx` now point to `README.md`. |
 | **D3** | 2026-04-28 | Per WAV: rename active comp to `{scene}_V_{tail}` (split on last `_` from the WAV stem), then queue export; output `.mp4` uses the same base name. Helpers `wavBaseToCompVName`, `sanitizeExportName`. README updated for naming rules. |
 | **D4** | 2026-04-28 | Fix effect **matchNames**: Audio Spectrum is `ADBE AudSpect` (not `ADBE Aud Spectrum`); Glow uses `ADBE Glo2` with fallback to `ADBE Glow`. Prevents “Cannot add effect” right after folder dialogs. |
+| **D5** | 2026-04-28 | Spectrum/Glow: strict **English** property names + prefix fallback (no fuzzy substring). User’s numeric/menu spec; tunable `SPECTRUM_*` / `GLOW_*` indices before batch loop. Glow reduced to listed controls only. |
 
 ---
 
