@@ -1,0 +1,113 @@
+Create an After Effects automation script system for batch-rendering audio visualizer videos from a folder of .wav files.
+
+Goal:
+Automate an existing After Effects project/template so that each .wav file in a chosen folder is imported, assigned to the Audio Spectrum effect, rendered through Adobe Media Encoder, then the process repeats until all .wav files are processed.
+
+Use After Effects ExtendScript / JSX. If needed, create a small helper script or instructions file, but keep the main automation as a .jsx script that can be run from After Effects via File > Scripts > Run Script File.
+
+Important:
+Before processing audio files, make sure the composition contains an audio visualizer layer using the settings shown below.
+
+Assumptions:
+- There is an existing After Effects project open.
+- There is a main composition to render.
+- The visualizer is on a solid layer named "Black Solid 1".
+- The Audio Spectrum effect is applied to "Black Solid 1".
+- The Glow effect is also applied to "Black Solid 1".
+- The audio file should be imported as its own layer.
+- If an old audio layer exists, it should be deleted before importing the next one.
+- Each output should use the audio filename as the rendered video filename.
+- The script should ask the user to choose:
+  1. the input folder containing .wav files
+  2. the output folder for rendered videos
+
+Main required workflow:
+1. Find the main active composition.
+2. Locate the visualizer layer named "Black Solid 1".
+3. Make sure it has an Audio Spectrum effect and Glow effect. Add them if missing.
+4. Configure the Audio Spectrum effect with these settings:
+
+Audio Spectrum settings:
+- Audio Layer: set dynamically to the imported audio layer
+- Start Point: 640, 360
+- End Point: 1280, 360
+- Path: None
+- Use Polar Path: false
+- Start Frequency: 200
+- End Frequency: 1000
+- Frequency Bands: 40
+- Maximum Height: 1000
+- Audio Duration: 50 milliseconds
+- Audio Offset: 0 milliseconds
+- Thickness: 10
+- Softness: 10%
+- Inside Color: white
+- Outside Color: white
+- Blend Overlapping Colors: false
+- Hue Interpolation: 0x + 0 degrees
+- Dynamic Hue Phase: false
+- Color Symmetry: false
+- Display Options: Digital
+- Side Options: Side A & B
+- Duration Averaging: false
+- Composite On Original: false
+
+Glow settings:
+- Glow Based On: Color Channels
+- Glow Threshold: 60%
+- Glow Radius: 30
+- Glow Intensity: 0.5
+- Composite Original: Behind
+- Glow Operation: Add
+- Glow Colors: Original Colors
+- Color Looping: Triangle A>B>A
+- Color Loops: 1.0
+- Color Phase: 0x + 0 degrees
+- A & B Midpoint: 50%
+- Color A: white
+- Color B: black
+- Glow Dimensions: Horizontal and Vertical
+
+5. Loop through every .wav file in the selected input folder.
+6. For each file:
+   - Delete any previous imported audio layer in the composition.
+   - Import the new .wav file into the project.
+   - Add it to the main comp as its own layer.
+   - Rename the layer to something predictable like "CURRENT_AUDIO_LAYER".
+   - Match the composition/work area duration to the audio layer duration.
+   - Set the Audio Spectrum effect’s Audio Layer property to the new audio layer.
+   - Add the comp to the Adobe Media Encoder Queue.
+   - Set the output file path/name based on the .wav filename.
+   - Start Adobe Media Encoder processing/export.
+   - Continue to the next file after queueing/rendering.
+
+Important implementation details:
+- Use app.project.importFile() to import audio.
+- Use comp.layers.add() to place the imported audio into the composition.
+- Use comp.workAreaStart = 0.
+- Use comp.workAreaDuration = audioLayer.outPoint or audioLayer.source.duration.
+- Delete old audio layers by name, preferably "CURRENT_AUDIO_LAYER", and also remove any imported audio footage from previous runs if possible.
+- Use app.project.renderQueue.items.add(comp) where needed.
+- Use app.project.renderQueue.queueInAME(true) to send to Adobe Media Encoder.
+- Include comments explaining where After Effects scripting may require manual adjustment depending on installed AE/AME versions.
+- Include error handling if:
+  - no project is open
+  - no composition is active
+  - no .wav files are found
+  - the visualizer layer is missing
+  - the Audio Spectrum effect cannot be found or added
+  - Adobe Media Encoder queueing fails
+
+Please create:
+1. batch_audio_visualizer.jsx
+2. README.md with step-by-step instructions for:
+   - opening the AE template
+   - running the script
+   - choosing input/output folders
+   - checking that "Black Solid 1" exists
+   - confirming AME export settings
+   - troubleshooting common issues
+
+Write the code in a beginner-friendly way with clear comments.
+
+Also include a note that some effect property names can vary by After Effects version, so if a property does not set correctly, the script should log the property names it found for Audio Spectrum and Glow to help debugging.
